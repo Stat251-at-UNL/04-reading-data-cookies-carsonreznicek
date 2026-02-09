@@ -2,7 +2,7 @@
 title: "Chocolate Chip Cookies"
 execute:
   error: true
-author: "Your Name"
+author: "Carson Reznicek"
 output: html_document
 ---
 
@@ -12,11 +12,21 @@ First, read in the CSV data of cookie ingredients.
 Make sure that your end-result data has appropriate types for each column - these should match the types provided in the documentation in the README.md file.
 
 ```{r}
+library(tidyverse)
+library(skimr)
+library(reticulate)
 
+cookies <- read_csv("choc_chip_cookie_ingredients.csv")
+
+glimpse(cookies)
 ```
 
 ```{python}
+import pandas as pd
+from skimpy import skim
 
+cookies_py = pd.read_csv("choc_chip_cookie_ingredients.csv")
+print(cookies_py.info())
 ```
 
 
@@ -34,11 +44,11 @@ Exploratory data analysis is the process of getting familiar with your dataset. 
 
 Generate at least 5 questions you might explore using this database of cookie ingredients.
 
-1.
-2. 
-3. 
-4. 
-5. 
+1. What is the most common unit of measurement in this dataset?
+2. Which ingredient is the highest percentage in recipes?
+3. Are there any recipes with very high or low ratings that use rare ingredients?
+4. Does the total number of ingredients in a recipe correlate with its rating?
+5. What is the average amount of all purpose flour used across recipes in the dataset?
 
 
 ### Skimming the Data
@@ -53,14 +63,19 @@ Install both packages, and read the package documentation ([R](https://cran.r-pr
 
 
 ```{r}
-
+skim(cookies) %>% 
+  yank("numeric")
 ```
 
 ```{python}
-
+skim(cookies_py[['Rating', 'Quantity']])
 ```
 
 [Part 2] Write 1-2 sentences about what you can tell from each summary display you generate. Did you discover anything new about the data?
+
+In the R summary I can see that the column has 1,010 missing values which is a significant amount of data that will impact how I calculate averages later on. The Quantity column for R has a very high standard deviation relative to mean which could mean this dataset may have a variety of measurement scales.
+
+In the python summary there is a lot of data missing in ratings, and the histogram was helpful in identifying that the the existing ratings are heavily skewed towards the higher end. The Quantity variable has a maximum of 48 which could be an outlier or value difference to look more into.
 
 ### Generating Tables
 
@@ -69,10 +84,37 @@ You may want to use the `dplyr` package in R (`group_by` or `count` functions), 
 
 [Part 1] Using R and Python, generate a table that shows what **proportion** of recipes contain each type of ingredient, for the most common 20 ingredients.
 
+```{r}
+all_recipes <- n_distinct(cookies$Recipe_Index)
+
+top20 <- cookies %>%
+  group_by(Ingredient) %>%
+  summarise(recipe_count = n_distinct(Recipe_Index)) %>%
+  mutate(proportion = recipe_count / all_recipes) %>%
+  arrange(desc(proportion)) %>%
+  slice_head(n = 20)
+
+print(top20)
+```
+
+```{python}
+total_recipes = cookies_py['Recipe_Index'].nunique()
+
+props_py = (cookies_py.groupby('Ingredient')['Recipe_Index'].nunique() / total_recipes)
+print(props_py.sort_values(ascending=False).head(20))
+```
+
 [Part 2] Print out a character string that lists all of the ingredients that do not appear in at least 20 recipes.
 
+```{r}
+rare <- cookies %>%
+  group_by(Ingredient) %>%
+  summarise(count = n_distinct(Recipe_Index)) %>%
+  filter(count < 20) %>%
+  pull(Ingredient)
 
-(Delete this note, but you can include data values inline in markdown text by using backticks, at least in R. For instance, here is R's built in value for pi: `r pi`. Unfortunately, this doesn't work in python using the knitr markdown engine, but you can print the list out in python anyways using a code chunk.)
+cat(paste(rare, collapse = ", "))
+```
 
 ### Visualization
 
@@ -80,4 +122,28 @@ Using whatever plotting system you are comfortable with in R or python, see if y
 
 [Part 1] Create at least one plot (it doesn't have to be pretty) that showcases an interesting facet of the data.
 
+```{r}
+top10 <- cookies %>%
+  count(Ingredient, sort = TRUE) %>%
+  top_n(10, n) %>%
+  pull(Ingredient)
+
+cookies %>%
+  filter(Ingredient %in% top10) %>%
+  ggplot(aes(x = reorder(Ingredient, Quantity, FUN = median), y = Quantity)) +
+  geom_boxplot(fill = "blue", outlier.color = "red", outlier.shape = 1) +
+  coord_flip() + 
+  labs(
+    title = "Distribution for Common Ingredients",
+    subtitle = "red circles are potential outliers / unit inconsistencies",
+    x = "Ingredient",
+    y = "Quantity"
+  ) +
+  theme_minimal()
+```
+
 [Part 2] Write 2-3 sentences about what you can learn from that plot and what directions you might want to investigate from here.
+
+This boxplot shows the functional roles of ingredients. For example, all purpose flour and butter show higher median quantities than baking soda or vanilla extract. I added red outliers that are now visually tied to specific ingredients which reveals data entry errors or recipes using different units like grams instead of cups that need to be cleaned up.
+
+From here, I would look into the specific recipes associated with the extreme outliers to see if they are standard size batches or just errors. I would also look at whether recipes that use significantly more of a specific accent ingredient like double the standard amount of vanilla result in higher user ratings.
