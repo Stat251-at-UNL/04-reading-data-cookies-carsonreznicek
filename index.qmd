@@ -2,7 +2,7 @@
 title: "Chocolate Chip Cookies"
 execute:
   error: true
-author: "Your Name"
+author: "Carson Reznicek"
 output: html_document
 ---
 
@@ -12,11 +12,37 @@ First, read in the CSV data of cookie ingredients.
 Make sure that your end-result data has appropriate types for each column - these should match the types provided in the documentation in the README.md file.
 
 ```{r}
+library(tidyverse)
+library(skimr)
+library(reticulate)
 
+cookies <- read_csv("choc_chip_cookie_ingredients.csv")
+
+cookies <- cookies %>%
+  mutate(
+    Ingredient = as.factor(Ingredient),
+    Recipe_Index = as.factor(Recipe_Index),
+    Unit = as.factor(Unit),
+    Rating = as.numeric(Rating),
+    Quantity = as.numeric(Quantity)
+  )
+
+glimpse(cookies)
 ```
 
 ```{python}
+import pandas as pd
+from skimpy import skim
 
+cookies_py = pd.read_csv("choc_chip_cookie_ingredients.csv")
+
+cookies_py['Ingredient'] = cookies_py['Ingredient'].astype('category')
+cookies_py['Recipe_Index'] = cookies_py['Recipe_Index'].astype('category')
+cookies_py['Unit'] = cookies_py['Unit'].astype('category')
+cookies_py['Rating'] = pd.to_numeric(cookies_py['Rating'], errors='coerce')
+cookies_py['Quantity'] = pd.to_numeric(cookies_py['Quantity'], errors='coerce')
+
+print(cookies_py.info())
 ```
 
 
@@ -34,11 +60,11 @@ Exploratory data analysis is the process of getting familiar with your dataset. 
 
 Generate at least 5 questions you might explore using this database of cookie ingredients.
 
-1.
-2. 
-3. 
-4. 
-5. 
+1. How does the distribution of the most common units of measurement vary across the dataset?
+2. What is the overall distribution of ingredient frequency across all unique recipes?
+3. To what extent does the presence of "rare" ingredients (those in < 20 recipes) influence the variation in recipe ratings?
+4. Is there a non-zero correlation between the variety of ingredients in a recipe and its average user rating?
+5. What is the distribution of quantities used for "all-purpose flour" across all recipes that utilize it?
 
 
 ### Skimming the Data
@@ -53,14 +79,17 @@ Install both packages, and read the package documentation ([R](https://cran.r-pr
 
 
 ```{r}
-
+skim(cookies) %>% 
+  yank("numeric")
 ```
 
 ```{python}
-
+skim(cookies_py[['Rating', 'Quantity']])
 ```
 
 [Part 2] Write 1-2 sentences about what you can tell from each summary display you generate. Did you discover anything new about the data?
+
+The R summary reveals that the Rating column has 1,010 missing values, which is a large portion of the dataset, approximately 50%, that will require careful handling during analysis. The Quantity column shows a high standard deviation relative to the mean, which likely indicates that the dataset contains a wide variety of measurement scales or units that need to be standardized.
 
 ### Generating Tables
 
@@ -69,10 +98,37 @@ You may want to use the `dplyr` package in R (`group_by` or `count` functions), 
 
 [Part 1] Using R and Python, generate a table that shows what **proportion** of recipes contain each type of ingredient, for the most common 20 ingredients.
 
+```{r}
+all_recipes <- n_distinct(cookies$Recipe_Index)
+
+top20_table <- cookies %>%
+  group_by(Ingredient) %>%
+  summarise(recipe_count = n_distinct(Recipe_Index)) %>%
+  mutate(proportion = recipe_count / all_recipes) %>%
+  arrange(desc(proportion)) %>%
+  slice_head(n = 20)
+
+print(top20_table)
+```
+
+```{python}
+total_recipes = cookies_py['Recipe_Index'].nunique()
+
+props_py = (cookies_py.groupby('Ingredient')['Recipe_Index'].nunique() / total_recipes)
+print(props_py.sort_values(ascending=False).head(20))
+```
+
 [Part 2] Print out a character string that lists all of the ingredients that do not appear in at least 20 recipes.
 
+```{r}
+rare <- cookies %>%
+  group_by(Ingredient) %>%
+  summarise(count = n_distinct(Recipe_Index)) %>%
+  filter(count < 20) %>%
+  pull(Ingredient)
 
-(Delete this note, but you can include data values inline in markdown text by using backticks, at least in R. For instance, here is R's built in value for pi: `r pi`. Unfortunately, this doesn't work in python using the knitr markdown engine, but you can print the list out in python anyways using a code chunk.)
+cat(paste(rare, collapse = ", "))
+```
 
 ### Visualization
 
@@ -80,4 +136,29 @@ Using whatever plotting system you are comfortable with in R or python, see if y
 
 [Part 1] Create at least one plot (it doesn't have to be pretty) that showcases an interesting facet of the data.
 
+```{r}
+cup_data <- cookies %>%
+  filter(Unit == "cup")
+
+top10_cups <- cup_data %>%
+  count(Ingredient, sort = TRUE) %>%
+  top_n(10, n) %>%
+  pull(Ingredient)
+
+cup_data %>%
+  filter(Ingredient %in% top10_cups) %>%
+  ggplot(aes(x = reorder(Ingredient, Quantity, FUN = median), y = Quantity)) +
+  geom_boxplot(fill = "blue", outlier.color = "red", outlier.shape = 1) +
+  coord_flip() + 
+  labs(
+    title = "Quantity Distribution for Ingredients Measured in Cups",
+    subtitle = "red circles are potential outliers within the 'cup' unit",
+    x = "Ingredient",
+    y = "Quantity (Cups)"
+  ) +
+  theme_minimal()
+```
+
 [Part 2] Write 2-3 sentences about what you can learn from that plot and what directions you might want to investigate from here.
+
+This boxplot compares the quantities of common ingredients restricted specifically to those measured in cups to ensure a valid comparison. By isolating the unit we can see that bulk ingredients like all-purpose flour have higher median quantities and wider distributions than more standard cup-based additions like walnuts. From here, I would investigate the extreme outliers (red circles) remaining in the cup data to determine if they represent 'bulk-sized' recipes or data entry errors.
