@@ -18,6 +18,15 @@ library(reticulate)
 
 cookies <- read_csv("choc_chip_cookie_ingredients.csv")
 
+cookies <- cookies %>%
+  mutate(
+    Ingredient = as.factor(Ingredient),
+    Recipe_Index = as.factor(Recipe_Index),
+    Unit = as.factor(Unit),
+    Rating = as.numeric(Rating),
+    Quantity = as.numeric(Quantity)
+  )
+
 glimpse(cookies)
 ```
 
@@ -26,6 +35,13 @@ import pandas as pd
 from skimpy import skim
 
 cookies_py = pd.read_csv("choc_chip_cookie_ingredients.csv")
+
+cookies_py['Ingredient'] = cookies_py['Ingredient'].astype('category')
+cookies_py['Recipe_Index'] = cookies_py['Recipe_Index'].astype('category')
+cookies_py['Unit'] = cookies_py['Unit'].astype('category')
+cookies_py['Rating'] = pd.to_numeric(cookies_py['Rating'], errors='coerce')
+cookies_py['Quantity'] = pd.to_numeric(cookies_py['Quantity'], errors='coerce')
+
 print(cookies_py.info())
 ```
 
